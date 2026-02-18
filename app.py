@@ -3,8 +3,9 @@ from openai import OpenAI
 import PyPDF2
 import io
 from fpdf import FPDF
+from datetime import datetime
 
-# ============== PASTE YOUR FULL NZLegalMaster Pro PROMPT HERE ==============
+# ============== YOUR FULL NZLegalMaster Pro SYSTEM PROMPT ==============
 SYSTEM_PROMPT = """You are NZLegalMaster Pro – a unified, elite AI expert merging five specialized tools into one seamless persona:
 1. **NZ Law & Constitution Authority**: Master of all NZ law branches (criminal, civil, family, employment, environmental/RMA, Māori/Treaty, administrative, commercial) and uncodified constitution (Constitution Act 1986, Bill of Rights 1990, conventions, Treaty of Waitangi 1840 as foundational, parliamentary sovereignty, electoral reforms like MMP). Subclasses: Intersections (e.g., human rights permeation, international treaties), evolving case law (Supreme Court precedents like R v Hansen [2007] on BORA), historical contexts (Statute of Westminster 1947), potential codification debates (e.g., ecological focus from private drafts like sita.constitution.org.nz).
 2. **Full NZ Building Code Expert**: Authority on Building Act 2004 (amendments incl. 2021 modular, earthquake-prone 2016, Building and Construction (Small Stand-alone Dwellings) Amendment Act 2025 effective 15 Jan 2026), Regulations 1992 Schedule 1 (Clauses A1–H1: structure, durability, fire, access, moisture, energy, services, hazards). Subclasses: Compliance paths (Acceptable Solutions/AS, Verification Methods/VM, Alternatives), standards (NZS 3604 timber, AS/NZS 1170 seismic, NZS 4121 accessibility, E2 weathertightness), consenting (BC, CCC, exemptions under Schedule 1), enforcement, integrations with RMA, HSWA 2015.
@@ -24,8 +25,6 @@ Operational Guidelines:
 - Files: Analyze uploads (plans, PDFs like H1/AS1, consents) directly.
 - Ethical: Uphold fairness, Te Tiriti partnership; no speculation.
 
-Commercial Mode: If it makes sense, end with “Want me to turn this into a full professional report with headings, tables and citations for $79? Just say yes and I’ll make it ready to email to your customer.”
-
 Every single answer MUST finish with this exact bold line:  
 **Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**
 
@@ -35,16 +34,15 @@ st.set_page_config(page_title="NZ LAW & BUILDING", page_icon="🏗️", layout="
 
 st.title("🏗️ NZ LAW & BUILDING")
 st.header("Automatic Expert Report Generator")
-
-st.subheader("Upload files + tell us what you need → get full report instantly")
+st.subheader("Drag & drop files → tell us exactly what you need → get full report instantly")
 
 with st.form("auto_form"):
     name = st.text_input("Your full name *")
-    email = st.text_input("Your email * (for confirmation)")
-    request = st.text_area("What exactly do you need? (be specific)", 
-        placeholder="Full Building Code compliance check before I lodge these plans to Auckland Council\nOR\nDraft my complete Resource Consent application for this wastewater discharge\nOR\nH1 energy efficiency upgrade report + product recommendations")
+    email = st.text_input("Your email *")
+    request = st.text_area("What exactly do you need? (be very specific)", 
+        placeholder="Full Building Code compliance check before lodging these plans to Auckland Council\nOR\nDraft my complete Resource Consent application for wastewater discharge\nOR\nH1 energy efficiency upgrade report + product recommendations")
     
-    files = st.file_uploader("Drag & drop ALL files here (plans, RFIs, RCs, PDFs, photos, drawings)", 
+    files = st.file_uploader("Drag & drop ALL files here (plans, RFIs, RCs, PDFs, drawings, photos – any number allowed)", 
                             accept_multiple_files=True, 
                             type=['pdf','jpg','jpeg','png','dwg','doc','docx'])
     
@@ -54,16 +52,18 @@ if submitted:
     if not (name and email and request and files):
         st.error("Please fill name, email, request and upload at least one file")
     else:
-        with st.spinner("NZLegalMaster Pro is reading your files and writing the full report... (20-90 seconds)"):
-            # Extract text from files
+        with st.spinner("NZLegalMaster Pro is analysing your files and writing the full report... (20-90 seconds)"):
             all_text = ""
             file_names = ""
             for file in files:
                 file_names += f"• {file.name}\n"
                 if file.name.lower().endswith('.pdf'):
-                    pdf = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
-                    for page in pdf.pages:
-                        all_text += page.extract_text() + "\n\n"
+                    try:
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
+                        for page in pdf_reader.pages:
+                            all_text += page.extract_text() + "\n\n"
+                    except:
+                        pass
 
             user_message = f"""Name: {name}
 Email: {email}
@@ -72,10 +72,10 @@ Request: {request}
 Files uploaded:
 {file_names}
 
-Text extracted from documents:
+Extracted text from documents:
 {all_text[:120000]}
 
-Now generate the complete professional report using ALL your NZLegalMaster Pro capabilities."""
+Generate the complete professional report using ALL NZLegalMaster Pro capabilities."""
 
             client = OpenAI(
                 api_key=st.secrets["xai_api_key"],
@@ -92,14 +92,14 @@ Now generate the complete professional report using ALL your NZLegalMaster Pro c
                 max_tokens=12000
             )
 
-            report = response.choices[0].message.content
+            report = response.choices[0].message.content.strip()
 
             st.success("✅ Your full NZLegalMaster Pro Report is ready!")
 
             st.markdown("### 📄 Your Report")
             st.markdown(report)
 
-            # PDF Download
+            # Clean PDF generation
             class PDF(FPDF):
                 def header(self):
                     self.set_font('Arial', 'B', 14)
@@ -107,7 +107,7 @@ Now generate the complete professional report using ALL your NZLegalMaster Pro c
                 def footer(self):
                     self.set_y(-15)
                     self.set_font('Arial', 'I', 8)
-                    self.cell(0, 10, f'Generated {datetime.now().strftime("%d %b %Y")} - Page {self.page_no()}', 0, 0, 'C')
+                    self.cell(0, 10, f'Generated {datetime.now().strftime("%d %b %Y %H:%M")} - Page {self.page_no()}', 0, 0, 'C')
 
             pdf = PDF()
             pdf.add_page()
@@ -115,12 +115,14 @@ Now generate the complete professional report using ALL your NZLegalMaster Pro c
             pdf.multi_cell(0, 6, report)
 
             pdf_bytes = pdf.output(dest="S").encode("latin-1")
+
             st.download_button(
                 label="📥 Download Report as PDF (ready to print or send to council)",
                 data=pdf_bytes,
-                file_name=f"NZLegalMaster_Report_{name.replace(' ', '_')}.pdf",
+                file_name=f"NZLegalMaster_Report_{name.replace(' ', '_')}_{datetime.now().strftime('%d%b')}.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
 
-st.caption("**Not legal or building advice. Always verify with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
+st.caption("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
+st.caption("Built for Cawchi – powered by NZLegalMaster Pro + Grok API")
