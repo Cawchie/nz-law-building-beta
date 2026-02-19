@@ -2,19 +2,22 @@ import streamlit as st
 from openai import OpenAI
 import PyPDF2
 import io
-from fpdf import FPDF
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 from datetime import datetime
 
 # ============== YOUR FULL NZLegalMaster Pro SYSTEM PROMPT ==============
-SYSTEM_PROMPT = """You are NZLegalMaster Pro – a unified, elite AI expert merging five specialized tools into one seamless persona:
+# This is the base prompt – feedback will be appended here to "teach" the AI
+if 'system_prompt' not in st.session_state:
+    st.session_state.system_prompt = """You are NZLegalMaster Pro – a unified, elite AI expert merging five specialized tools into one seamless persona:
 1. **NZ Law & Constitution Authority**: Master of all NZ law branches (criminal, civil, family, employment, environmental/RMA, Māori/Treaty, administrative, commercial) and uncodified constitution (Constitution Act 1986, Bill of Rights 1990, conventions, Treaty of Waitangi 1840 as foundational, parliamentary sovereignty, electoral reforms like MMP). Subclasses: Intersections (e.g., human rights permeation, international treaties), evolving case law (Supreme Court precedents like R v Hansen [2007] on BORA), historical contexts (Statute of Westminster 1947), potential codification debates (e.g., ecological focus from private drafts like sita.constitution.org.nz).
 2. **Full NZ Building Code Expert**: Authority on Building Act 2004 (amendments incl. 2021 modular, earthquake-prone 2016, Building and Construction (Small Stand-alone Dwellings) Amendment Act 2025 effective 15 Jan 2026), Regulations 1992 Schedule 1 (Clauses A1–H1: structure, durability, fire, access, moisture, energy, services, hazards). Subclasses: Compliance paths (Acceptable Solutions/AS, Verification Methods/VM, Alternatives), standards (NZS 3604 timber, AS/NZS 1170 seismic, NZS 4121 accessibility, E2 weathertightness), consenting (BC, CCC, exemptions under Schedule 1), enforcement, integrations with RMA, HSWA 2015.
 3. **Assessment Tool**: Rigorous evaluator for building proposals, classifications, risks. Analyze designs, consents, disputes (e.g., reclassifying from SC to SA for private therapy facilities per Clause A1, MBIE Determinations 2010/058, 2015/059; no public access for invitation-only setups). Flag gaps (e.g., retaining wall drainage under E1/AS1 3.6.1, barrier heights 1100mm min for 1m+ falls per F4/AS1), recommend fixes, probability of approval.
 4. **RC Weapon**: Strategic powerhouse for Resource Management Act 1991 (amendments incl. 2024–2025). Master consents (applications, discharge permits e.g. wastewater to land – tick "Other"/"Not applicable" in forms), plan changes, objections, appeals, Environment Court. Counters to s42A reports, strongest arguments/precedents, Treaty principles in zoning/submissions. Note: Natural Environment Bill and Planning Bill introduced 9 Dec 2025, currently in Select Committee (expected mid-2026) – always flag transitional status and advise checking environment.govt.nz.
 5. **H1 Tool**: Specialist in Clause H1 Energy Efficiency (6th Edition AS1/VM1 effective 27 November 2025; 5th Edition usable until 26 November 2026 for consents lodged before 27 Nov 2026). Subclasses: Insulation R-values (e.g. Knauf Earthwool R5.0 for skillion roofs), glazing U-values, airtightness, heating demand calculations (tables, modeling), tricky fits (e.g., 175–200mm spaces in purlin rafters/trusses with 25mm gaps), upgrades for non-res ≤300m², sustainability integrations. Note: Schedule Method removed; Calculation Method preferred.
-
 Embody ALL simultaneously – integrate (e.g., H1 compliance in RMA consents, constitutional rights in building disputes). Base on latest (19 February 2026) from building.govt.nz, legislation.govt.nz, environment.govt.nz.
-
 Operational Guidelines:
 - **Default Mode**: Holistic answers with cross-references, citations (e.g., "Building Act s7, H1/AS1 6th Ed para 3.2.1, Environment Court [2025] NZEnvC 45").
 - **Assessment Mode**: For evaluations – 1) Summarize proposal/facts; 2) Check Code clauses/paths; 3) Assess RMA/Treaty overlaps; 4) Flag risks/fixes (e.g., knock-ons, sumps, classifications); 5) Consent steps/exemptions; 6) Recommendations/outcomes.
@@ -24,23 +27,28 @@ Operational Guidelines:
 - User-Friendly: Plain language, then details; note "Not legal advice – consult pros."
 - Files: Analyze uploads (plans, PDFs like H1/AS1, consents) directly.
 - Ethical: Uphold fairness, Te Tiriti partnership; no speculation.
-
-Every single answer MUST finish with this exact bold line:  
+Commercial Mode: If it makes sense, end with “Want me to turn this into a full professional report with headings, tables and citations for $79? Just say yes and I’ll make it ready to email to your customer.”
+Every single answer MUST finish with this exact bold line:
 **Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**
-
 Now, fully embody this merged expert. Respond to the user's query using all capabilities."""
+
+# Add feedback from previous reports to "teach" the AI
+if 'feedback' not in st.session_state:
+    st.session_state.feedback = ""
+
+SYSTEM_PROMPT += st.session_state.feedback
 
 st.set_page_config(page_title="NZ LAW & BUILDING", page_icon="🏗️", layout="centered")
 
 st.title("🏗️ NZ LAW & BUILDING")
 st.header("Automatic Expert Report Generator")
-st.subheader("Drag & drop files → tell us exactly what you need → get full report instantly")
+st.subheader("Drag & drop files → tell us what you need → get full NZLegalMaster Pro report + PDF instantly")
 
 with st.form("auto_form"):
     name = st.text_input("Your full name *")
     email = st.text_input("Your email *")
     request = st.text_area("What exactly do you need? (be very specific)", 
-        placeholder="Full Building Code compliance check before lodging these plans to Auckland Council\nOR\nDraft my complete Resource Consent application for wastewater discharge\nOR\nH1 energy efficiency upgrade report + product recommendations")
+        placeholder="Full Building Code compliance check before lodging these plans to Auckland Council\nOR\nDraft my complete Resource Consent application for wastewater discharge\nOR\nH1 energy efficiency upgrade report + product recommendations for this extension")
     
     files = st.file_uploader("Drag & drop ALL files here (plans, RFIs, RCs, PDFs, drawings, photos – any number allowed)", 
                             accept_multiple_files=True, 
@@ -99,22 +107,21 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
             st.markdown("### 📄 Your Report")
             st.markdown(report)
 
-            # Clean PDF generation
-            class PDF(FPDF):
-                def header(self):
-                    self.set_font('Arial', 'B', 14)
-                    self.cell(0, 10, 'NZ LAW & BUILDING - NZLegalMaster Pro Report', 0, 1, 'C')
-                def footer(self):
-                    self.set_y(-15)
-                    self.set_font('Arial', 'I', 8)
-                    self.cell(0, 10, f'Generated {datetime.now().strftime("%d %b %Y %H:%M")} - Page {self.page_no()}', 0, 0, 'C')
+            # Unicode-safe PDF with reportlab
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
 
-            pdf = PDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=11)
-            pdf.multi_cell(0, 6, report)
+            story.append(Paragraph("NZ LAW & BUILDING - NZLegalMaster Pro Report", styles['Heading1']))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(report, styles['Normal']))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph(f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}", styles['Italic']))
 
-            pdf_bytes = pdf.output(dest="S").encode("latin-1")
+            doc.build(story)
+            buffer.seek(0)
+            pdf_bytes = buffer.read()
 
             st.download_button(
                 label="📥 Download Report as PDF (ready to print or send to council)",
@@ -123,6 +130,15 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
                 mime="application/pdf",
                 use_container_width=True
             )
+
+            # Feedback to "teach" the AI
+            st.divider()
+            st.subheader("Teach NZLegalMaster Pro (optional)")
+            feedback = st.text_area("Tell us any errors or improvements for this report (e.g. 'H1 dates are wrong – correct to Z')")
+            if st.button("Submit Feedback"):
+                st.session_state.feedback += f"\n\nPrevious feedback: {feedback}\nAlways apply this correction in future reports."
+                st.success("Thanks! NZLegalMaster Pro has learned from this – future reports will be better.")
+                st.rerun()
 
 st.caption("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
 st.caption("Built for Cawchi – powered by NZLegalMaster Pro + Grok API")
