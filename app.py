@@ -2,10 +2,6 @@ import streamlit as st
 from openai import OpenAI
 import PyPDF2
 import io
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
 from datetime import datetime
 
 # ============== YOUR FULL NZLegalMaster Pro SYSTEM PROMPT ==============
@@ -32,7 +28,7 @@ Now, fully embody this merged expert. Respond to the user's query using all capa
 
 st.title("🏗️ NZ LAW & BUILDING")
 st.header("Automatic Expert Report Generator")
-st.subheader("Drag & drop files → tell us what you need → get full NZLegalMaster Pro report + PDF instantly")
+st.subheader("Drag & drop files → tell us what you need → get full report instantly")
 
 with st.form("auto_form"):
     name = st.text_input("Your full name *")
@@ -50,7 +46,7 @@ if submitted:
     if not (name and email and request and files):
         st.error("Please fill name, email, request and upload at least one file")
     else:
-        with st.spinner("NZLegalMaster Pro is analysing your files and writing the full report... (20-90 seconds)"):
+        with st.spinner("NZLegalMaster Pro is analysing your files... (20-90 seconds)"):
             all_text = ""
             file_names = ""
             for file in files:
@@ -97,29 +93,21 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
             st.markdown("### 📄 Your Report")
             st.markdown(report)
 
-            # Reportlab PDF generation
-            buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=letter)
-            styles = getSampleStyleSheet()
-            story = []
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📋 Copy Report to Clipboard"):
+                    st.code(report, language=None)
+                    st.success("Copied! Paste into Word or email.")
+            with col2:
+                st.download_button(
+                    label="📥 Download Report as TXT",
+                    data=report,
+                    file_name=f"NZLegalMaster_Report_{name.replace(' ', '_')}_{datetime.now().strftime('%d%b')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
 
-            story.append(Paragraph("NZ LAW & BUILDING - NZLegalMaster Pro Report", styles['Heading1']))
-            story.append(Spacer(1, 12))
-            story.append(Paragraph(report, styles['Normal']))
-            story.append(Spacer(1, 12))
-            story.append(Paragraph(f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}", styles['Italic']))
-
-            doc.build(story)
-            buffer.seek(0)
-            pdf_bytes = buffer.read()
-
-            st.download_button(
-                label="📥 Download Report as PDF (ready to print or send to council)",
-                data=pdf_bytes,
-                file_name=f"NZLegalMaster_Report_{name.replace(' ', '_')}_{datetime.now().strftime('%d%b')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.info("💡 To save as PDF: Click the browser menu → Print → Destination: Save as PDF")
 
 st.caption("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
 st.caption("Built for Cawchi – powered by NZLegalMaster Pro + Grok API")
