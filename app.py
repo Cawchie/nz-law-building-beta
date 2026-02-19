@@ -9,9 +9,7 @@ from reportlab.lib import colors
 from datetime import datetime
 
 # ============== YOUR FULL NZLegalMaster Pro SYSTEM PROMPT ==============
-# This is the base prompt – feedback will be appended here to "teach" the AI
-if 'system_prompt' not in st.session_state:
-    st.session_state.system_prompt = """You are NZLegalMaster Pro – a unified, elite AI expert merging five specialized tools into one seamless persona:
+SYSTEM_PROMPT = """You are NZLegalMaster Pro – a unified, elite AI expert merging five specialized tools into one seamless persona:
 1. **NZ Law & Constitution Authority**: Master of all NZ law branches (criminal, civil, family, employment, environmental/RMA, Māori/Treaty, administrative, commercial) and uncodified constitution (Constitution Act 1986, Bill of Rights 1990, conventions, Treaty of Waitangi 1840 as foundational, parliamentary sovereignty, electoral reforms like MMP). Subclasses: Intersections (e.g., human rights permeation, international treaties), evolving case law (Supreme Court precedents like R v Hansen [2007] on BORA), historical contexts (Statute of Westminster 1947), potential codification debates (e.g., ecological focus from private drafts like sita.constitution.org.nz).
 2. **Full NZ Building Code Expert**: Authority on Building Act 2004 (amendments incl. 2021 modular, earthquake-prone 2016, Building and Construction (Small Stand-alone Dwellings) Amendment Act 2025 effective 15 Jan 2026), Regulations 1992 Schedule 1 (Clauses A1–H1: structure, durability, fire, access, moisture, energy, services, hazards). Subclasses: Compliance paths (Acceptable Solutions/AS, Verification Methods/VM, Alternatives), standards (NZS 3604 timber, AS/NZS 1170 seismic, NZS 4121 accessibility, E2 weathertightness), consenting (BC, CCC, exemptions under Schedule 1), enforcement, integrations with RMA, HSWA 2015.
 3. **Assessment Tool**: Rigorous evaluator for building proposals, classifications, risks. Analyze designs, consents, disputes (e.g., reclassifying from SC to SA for private therapy facilities per Clause A1, MBIE Determinations 2010/058, 2015/059; no public access for invitation-only setups). Flag gaps (e.g., retaining wall drainage under E1/AS1 3.6.1, barrier heights 1100mm min for 1m+ falls per F4/AS1), recommend fixes, probability of approval.
@@ -31,14 +29,6 @@ Commercial Mode: If it makes sense, end with “Want me to turn this into a full
 Every single answer MUST finish with this exact bold line:
 **Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**
 Now, fully embody this merged expert. Respond to the user's query using all capabilities."""
-
-# Add feedback from previous reports to "teach" the AI
-if 'feedback' not in st.session_state:
-    st.session_state.feedback = ""
-
-SYSTEM_PROMPT += st.session_state.feedback
-
-st.set_page_config(page_title="NZ LAW & BUILDING", page_icon="🏗️", layout="centered")
 
 st.title("🏗️ NZ LAW & BUILDING")
 st.header("Automatic Expert Report Generator")
@@ -67,8 +57,8 @@ if submitted:
                 file_names += f"• {file.name}\n"
                 if file.name.lower().endswith('.pdf'):
                     try:
-                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
-                        for page in pdf_reader.pages:
+                        pdf = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
+                        for page in pdf.pages:
                             all_text += page.extract_text() + "\n\n"
                     except:
                         pass
@@ -107,7 +97,7 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
             st.markdown("### 📄 Your Report")
             st.markdown(report)
 
-            # Unicode-safe PDF with reportlab
+            # Reportlab PDF generation
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=letter)
             styles = getSampleStyleSheet()
@@ -118,6 +108,8 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
             story.append(Paragraph(report, styles['Normal']))
             story.append(Spacer(1, 12))
             story.append(Paragraph(f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}", styles['Italic']))
+            story.append(Spacer(1, 12))
+            story.append(Paragraph("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**", styles['Normal']))
 
             doc.build(story)
             buffer.seek(0)
@@ -130,15 +122,6 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
                 mime="application/pdf",
                 use_container_width=True
             )
-
-            # Feedback to "teach" the AI
-            st.divider()
-            st.subheader("Teach NZLegalMaster Pro (optional)")
-            feedback = st.text_area("Tell us any errors or improvements for this report (e.g. 'H1 dates are wrong – correct to Z')")
-            if st.button("Submit Feedback"):
-                st.session_state.feedback += f"\n\nPrevious feedback: {feedback}\nAlways apply this correction in future reports."
-                st.success("Thanks! NZLegalMaster Pro has learned from this – future reports will be better.")
-                st.rerun()
 
 st.caption("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
 st.caption("Built for Cawchi – powered by NZLegalMaster Pro + Grok API")
