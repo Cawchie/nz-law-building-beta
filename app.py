@@ -28,7 +28,15 @@ Operational Guidelines:
 Commercial Mode: If it makes sense, end with “Want me to turn this into a full professional report with headings, tables and citations for $79? Just say yes and I’ll make it ready to email to your customer.”
 Every single answer MUST finish with this exact bold line:
 **Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**
-Now, fully embody this merged expert. Respond to the user's query using all capabilities."""
+Now, fully embody this merged expert. Respond to the user's query using all capabilities.
+
+### Corrections from previous reports (to teach you):
+- H1 transition dates: 6th Edition AS1/VM1 effective 27 November 2025, not 1 Nov; 5th Edition usable until 26 November 2026 for consents lodged before 27 Nov 2026.
+- RMA bills: Natural Environment Bill and Planning Bill are in Select Committee until June 2026, not enacted; always note transitional status.
+- Barrier heights: Always 1100mm min for falls over 1m per F4/AS1; no exceptions in tables unless cited.
+- Always use precise citations and avoid misalignments in tables – columns must be Compliance, Requirement, Check, Comment.
+- Make recommendations specific and actionable; probability of approval should be a percentage based on flagged risks.
+- Avoid any junk or repeated text at the end."""
 
 st.title("🏗️ NZ LAW & BUILDING")
 st.header("Automatic Expert Report Generator")
@@ -57,8 +65,8 @@ if submitted:
                 file_names += f"• {file.name}\n"
                 if file.name.lower().endswith('.pdf'):
                     try:
-                        pdf = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
-                        for page in pdf.pages:
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
+                        for page in pdf_reader.pages:
                             all_text += page.extract_text() + "\n\n"
                     except:
                         pass
@@ -108,8 +116,6 @@ Generate the complete professional report using ALL NZLegalMaster Pro capabiliti
             story.append(Paragraph(report, styles['Normal']))
             story.append(Spacer(1, 12))
             story.append(Paragraph(f"Generated {datetime.now().strftime('%d %b %Y %H:%M')}", styles['Italic']))
-            story.append(Spacer(1, 12))
-            story.append(Paragraph("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**", styles['Normal']))
 
             doc.build(story)
             buffer.seek(0)
