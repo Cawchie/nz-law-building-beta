@@ -4,60 +4,114 @@ import PyPDF2
 import io
 from datetime import datetime
 
-# ============== UPDATED HUMAN TONE + RESOURCE CONSENT FOCUS ==============
-SYSTEM_PROMPT = """You are NZ Resource Consent Advisor – a friendly, experienced local expert who helps builders, homeowners and designers with Resource Consents in New Zealand.
+# Friendly Kiwi Resource Consent Expert (human tone)
+SYSTEM_PROMPT = """You are a friendly, straight-talking Kiwi resource consent expert with 15 years experience. You help builders and homeowners get their consents approved fast and easy.
 
-Speak like a helpful, straight-talking Kiwi planner who’s been doing this for 15 years. Use short sentences. Warm, practical tone. Explain any jargon simply. Never sound like a robot or a lawyer – sound like you’re talking over a coffee at the site.
+Talk like a helpful mate on the job site – simple words, short sentences, bullet points, encouraging, practical.
 
-You are an expert in the Resource Management Act 1991 (and the current bills in Select Committee). Always check plans against relevant district/region plans, give clear yes/no on whether an RC is needed, and draft full applications when asked.
+For "Do my plans need an RC" – give clear yes/no + why + next steps.
 
-Key rules:
-- Always start with the answer first (e.g. “Yes, these plans will need a Resource Consent because…”)
-- Use bullet points and short paragraphs
-- Be encouraging and practical
-- End every single response with this exact line in bold:
+For "Write my resource consent" – draft the full application in plain English with all sections ready to submit.
+
+For "Explain RFI" – explain what council is asking for and how to reply simply.
+
+Always end with:
 **Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**
 
-Now, fully embody this merged expert. Respond to the user's query in a natural, helpful New Zealand tone."""
+Now, fully embody this expert."""
 
 st.set_page_config(page_title="NZ Resource Consent Tool", page_icon="📋", layout="centered")
 
 st.title("📋 NZ Resource Consent Tool")
-st.header("Get clear answers on Resource Consents – fast")
+st.header("Practical help with Resource Consents")
 
 tab1, tab2, tab3 = st.tabs([
     "1. Do my plans need an RC and why?",
-    "2. Write my Resource Consent application",
-    "3. Explain this Request for Information (RFI) from council"
+    "2. Write my resource consent",
+    "3. Explain request for information from council"
 ])
 
-# Tab 1: Assessment
+def process_request(prompt_prefix, request, files):
+    with st.spinner("NZ Resource Consent Advisor is working... (20-60 seconds)"):
+        all_text = ""
+        file_names = ""
+        for file in files:
+            file_names += f"• {file.name}\n"
+            if file.name.lower().endswith('.pdf'):
+                try:
+                    pdf = PyPDF2.PdfReader(io.BytesIO(file.getvalue()))
+                    for page in pdf.pages:
+                        all_text += page.extract_text() + "\n\n"
+                except:
+                    pass
+
+        user_message = f"{prompt_prefix}\nRequest: {request}\nFiles: {file_names}\nExtracted text: {all_text[:120000]}"
+
+        client = OpenAI(
+            api_key=st.secrets["xai_api_key"],
+            base_url="https://api.x.ai/v1"
+        )
+
+        response = client.chat.completions.create(
+            model="grok-4",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.3,
+            max_tokens=8000
+        )
+
+        report = response.choices[0].message.content.strip()
+
+        st.success("✅ Report ready!")
+        st.markdown("### 📄 Your Report")
+        st.markdown(report)
+
+        st.download_button(
+            label="📥 Download Report as TXT",
+            data=report,
+            file_name=f"Resource_Consent_Report_{datetime.now().strftime('%d%b')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+        st.info("💡 To save as PDF: Click browser menu → Print → Save as PDF")
+
+# Tab 1
 with tab1:
     st.subheader("Do my plans need a Resource Consent?")
-    name = st.text_input("Your name")
-    request1 = st.text_area("Describe your project and upload plans", placeholder="New 2m high deck at 123 Beach Rd, Auckland. Attached are plans and site photos.")
-    files1 = st.file_uploader("Drag & drop plans, photos, site plans", accept_multiple_files=True, type=['pdf','jpg','jpeg','png','dwg'])
+    name1 = st.text_input("Your name", key="name1")
+    request1 = st.text_area("Describe your project", key="request1", placeholder="New 2m deck at 123 Beach Rd, Auckland...")
+    files1 = st.file_uploader("Drag & drop plans, photos, site plans", accept_multiple_files=True, type=['pdf','jpg','jpeg','png','dwg'], key="files1")
     if st.button("Check if I need an RC", type="primary", use_container_width=True):
-        # (processing code here – same as before but focused)
-        st.info("Processing...")
+        if name1 and request1 and files1:
+            process_request("Do these plans need a Resource Consent and why?", request1, files1)
+        else:
+            st.error("Please fill name, request and upload files")
 
-# Tab 2: Write application
+# Tab 2
 with tab2:
     st.subheader("Write my Resource Consent application")
-    request2 = st.text_area("Tell me about the project", placeholder="I want to build a 3-bedroom house on a rural site in Waikato with on-site wastewater...")
-    files2 = st.file_uploader("Drag & drop all plans and documents", accept_multiple_files=True, type=['pdf','jpg','jpeg','png','dwg'])
+    name2 = st.text_input("Your name", key="name2")
+    request2 = st.text_area("Describe your project", key="request2", placeholder="3-bedroom house on rural Waikato site with on-site wastewater...")
+    files2 = st.file_uploader("Drag & drop plans and documents", accept_multiple_files=True, type=['pdf','jpg','jpeg','png','dwg'], key="files2")
     if st.button("Write my full Resource Consent application", type="primary", use_container_width=True):
-        st.info("Writing your application...")
+        if name2 and request2 and files2:
+            process_request("Write the full Resource Consent application for this project", request2, files2)
+        else:
+            st.error("Please fill name, request and upload files")
 
-# Tab 3: Explain RFI
+# Tab 3
 with tab3:
     st.subheader("Explain this Request for Information from council")
-    request3 = st.text_area("Paste or describe the RFI from council", placeholder="Council asked for more info on stormwater, shading effects and neighbour consultation...")
-    files3 = st.file_uploader("Drag & drop the RFI letter + your plans", accept_multiple_files=True, type=['pdf','jpg','jpeg','png'])
+    name3 = st.text_input("Your name", key="name3")
+    request3 = st.text_area("Paste or describe the RFI", key="request3", placeholder="Council asked for more info on stormwater, shading and neighbour consultation...")
+    files3 = st.file_uploader("Drag & drop the RFI letter + your plans", accept_multiple_files=True, type=['pdf','jpg','jpeg','png','dwg'], key="files3")
     if st.button("Explain this RFI and how to reply", type="primary", use_container_width=True):
-        st.info("Analysing the RFI...")
+        if name3 and request3 and files3:
+            process_request("Explain this RFI from council and how to reply", request3, files3)
+        else:
+            st.error("Please fill name, RFI description and upload files")
 
 st.caption("**Not legal or building advice. Always check with a qualified professional, your council, or lawyer. Laws can change. This is an AI tool only.**")
 st.caption("Built for Cawchi – NZ Resource Consent Tool")
-
-# Full processing logic for all tabs will be added in the next update if you want. For now the interface is clean and focused.
